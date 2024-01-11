@@ -71,7 +71,7 @@ const (
 		"id": "fd8ff110-d3fd-49b4-b24f-f6cd3dddfedf",
 		"name": "my-store",
 		"api_name": "my-store",
-		"is_master": "true",
+		"is_master": true,
 		"endpoints": [
 			"http://rook-ceph-rgw-my-store.rook-ceph.svc:80"
 		],
@@ -152,6 +152,7 @@ const (
 			"ceph version 17.2.1 (0000000000000000) quincy (stable)": 3
 		}
 	}`
+	//nolint:gosec // only test values, not a real secret
 	userCreateJSON = `{
 	"user_id": "my-user",
 	"display_name": "my-user",
@@ -206,7 +207,7 @@ const (
 		"id": "fd8ff110-d3fd-49b4-b24f-f6cd3dddfedf",
 		"name": "zonegroup-a",
 		"api_name": "zonegroup-a",
-		"is_master": "true",
+		"is_master": true,
 		"endpoints": [],
 		"hostnames": [],
 		"hostnames_s3website": [],
@@ -242,7 +243,7 @@ const (
 		"id": "fd8ff110-d3fd-49b4-b24f-f6cd3dddfedf",
 		"name": "zonegroup-a",
 		"api_name": "zonegroup-a",
-		"is_master": "true",
+		"is_master": true,
 		"endpoints": [
 			"http://rook-ceph-rgw-my-store.rook-ceph.svc:80"
         ],
@@ -348,7 +349,7 @@ var mockMultisiteAdminOpsCtxFunc = func(objContext *Context, spec *cephv1.Object
 	return &AdminOpsContext{
 		Context:               *context,
 		AdminOpsUserAccessKey: "EOE7FYCNOBZJ5VFV909G",
-		AdminOpsUserSecretKey: "qmIqpWm8HxCzmynCrD6U6vKWi4hnDBndOnmxXNsV",
+		AdminOpsUserSecretKey: "qmIqpWm8HxCzmynCrD6U6vKWi4hnDBndOnmxXNsV", // notsecret
 		AdminOpsClient:        adminClient,
 	}, nil
 }
@@ -444,7 +445,7 @@ func TestCephObjectStoreController(t *testing.T) {
 	}
 
 	currentAndDesiredCephVersion = func(ctx context.Context, rookImage string, namespace string, jobName string, ownerInfo *k8sutil.OwnerInfo, context *clusterd.Context, cephClusterSpec *cephv1.ClusterSpec, clusterInfo *client.ClusterInfo) (*cephver.CephVersion, *cephver.CephVersion, error) {
-		return &cephver.Pacific, &cephver.Pacific, nil
+		return &cephver.Reef, &cephver.Reef, nil
 	}
 
 	t.Run("error - no ceph cluster", func(t *testing.T) {
@@ -580,7 +581,7 @@ func TestCephObjectStoreController(t *testing.T) {
 		assert.NotEmpty(t, objectStore.Status.Info["endpoint"], objectStore)
 		assert.Equal(t, "http://rook-ceph-rgw-my-store.rook-ceph.svc:80", objectStore.Status.Info["endpoint"], objectStore)
 		assert.True(t, calledCommitConfigChanges)
-		assert.Equal(t, 16, r.clusterInfo.CephVersion.Major)
+		assert.Equal(t, 18, r.clusterInfo.CephVersion.Major)
 	})
 }
 
@@ -781,7 +782,7 @@ func TestCephObjectStoreControllerMultisite(t *testing.T) {
 	}
 
 	currentAndDesiredCephVersion = func(ctx context.Context, rookImage string, namespace string, jobName string, ownerInfo *k8sutil.OwnerInfo, context *clusterd.Context, cephClusterSpec *cephv1.ClusterSpec, clusterInfo *client.ClusterInfo) (*cephver.CephVersion, *cephver.CephVersion, error) {
-		return &cephver.Pacific, &cephver.Pacific, nil
+		return &cephver.Reef, &cephver.Reef, nil
 	}
 
 	t.Run("create an object store", func(t *testing.T) {
@@ -953,7 +954,7 @@ func TestCephObjectExternalStoreController(t *testing.T) {
 	}
 
 	currentAndDesiredCephVersion = func(ctx context.Context, rookImage string, namespace string, jobName string, ownerInfo *k8sutil.OwnerInfo, context *clusterd.Context, cephClusterSpec *cephv1.ClusterSpec, clusterInfo *client.ClusterInfo) (*cephver.CephVersion, *cephver.CephVersion, error) {
-		return &cephver.Pacific, &cephver.Pacific, nil
+		return &cephver.Reef, &cephver.Reef, nil
 	}
 
 	{

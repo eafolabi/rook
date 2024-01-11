@@ -20,6 +20,7 @@ package cluster
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"path"
 	"strconv"
@@ -217,6 +218,11 @@ func (c *ClusterController) initializeCluster(cluster *cluster) error {
 
 		// Asynchronously report the telemetry to allow another reconcile to proceed if needed
 		go cluster.reportTelemetry()
+	}
+
+	err := csi.SaveCSIDriverOptions(c.context.Clientset, cluster.Namespace, cluster.ClusterInfo)
+	if err != nil {
+		return errors.Wrap(err, "failed to save CSI driver options")
 	}
 
 	// Populate ClusterInfo with the last value
@@ -444,32 +450,6 @@ func (c *cluster) replaceDefaultCrushMap(newRoot string) (err error) {
 
 // preMonStartupActions is a collection of actions to run before the monitors are reconciled.
 func (c *cluster) preMonStartupActions(cephVersion cephver.CephVersion) error {
-	// Disable the mds sanity checks for the mons due to a ceph upgrade issue
-	// for the mds to Pacific if 16.2.7 or greater. We keep it more general for any
-	// Pacific upgrade greater than 16.2.7 in case they skip upgrading directly to 16.2.7.
-	if c.isUpgrade && cephVersion.IsPacific() && cephVersion.IsAtLeast(cephver.CephVersion{Major: 16, Minor: 2, Extra: 7}) {
-		if err := c.skipMDSSanityChecks(true); err != nil {
-			// If there is an error, just print it and continue. Likely there is not a
-			// negative consequence of continuing since several complex conditions must exist to hit
-			// the upgrade issue where the sanity checks need to be disabled.
-			logger.Warningf("failed to disable the mon_mds_skip_sanity. %v", err)
-		}
-	}
-	return nil
-}
-
-func (c *cluster) skipMDSSanityChecks(skip bool) error {
-	// In a running cluster disable the mds skip sanity setting during upgrades.
-	monStore := config.GetMonStore(c.context, c.ClusterInfo)
-	if skip {
-		if err := monStore.Set("mon", "mon_mds_skip_sanity", "1"); err != nil {
-			return err
-		}
-	} else {
-		if err := monStore.Delete("mon", "mon_mds_skip_sanity"); err != nil {
-			return err
-		}
-	}
 	return nil
 }
 
@@ -478,28 +458,27 @@ func (c *cluster) skipMDSSanityChecks(skip bool) error {
 // Basically, it is executed between the monitors and the manager sequence
 func (c *cluster) postMonStartupActions() error {
 	// Create CSI Kubernetes Secrets
-	err := csi.CreateCSISecrets(c.context, c.ClusterInfo)
-	if err != nil {
+	if err := csi.CreateCSISecrets(c.context, c.ClusterInfo); err != nil {
 		return errors.Wrap(err, "failed to create csi kubernetes secrets")
 	}
 
 	// Create crash collector Kubernetes Secret
-	err = nodedaemon.CreateCrashCollectorSecret(c.context, c.ClusterInfo)
-	if err != nil {
+	if err := nodedaemon.CreateCrashCollectorSecret(c.context, c.ClusterInfo); err != nil {
 		return errors.Wrap(err, "failed to create crash collector kubernetes secret")
 	}
 
-	// Always ensure the skip mds sanity checks setting is cleared, for all Pacific deployments
-	if c.ClusterInfo.CephVersion.IsPacific() {
-		if err := c.skipMDSSanityChecks(false); err != nil {
-			// If there is an error, just print it and continue. We can just try again
-			// at the next reconcile.
-			logger.Warningf("failed to re-enable the mon_mds_skip_sanity. %v", err)
-		}
+	// Create exporter Kubernetes Secret
+	if err := nodedaemon.CreateExporterSecret(c.context, c.ClusterInfo); err != nil {
+		return errors.Wrap(err, "failed to create exporter kubernetes secret")
 	}
 
 	if err := c.configureMsgr2(); err != nil {
 		return errors.Wrap(err, "failed to configure msgr2")
+	}
+
+	// Set config store options
+	if err := c.updateConfigStoreFromCRD(); err != nil {
+		return errors.Wrap(err, "")
 	}
 
 	crushRoot := client.GetCrushRootFromSpec(c.Spec)
@@ -513,12 +492,16 @@ func (c *cluster) postMonStartupActions() error {
 	}
 
 	// Create cluster-wide RBD bootstrap peer token
-	_, err = controller.CreateBootstrapPeerSecret(c.context, c.ClusterInfo, &cephv1.CephCluster{ObjectMeta: metav1.ObjectMeta{Name: c.namespacedName.Name, Namespace: c.Namespace}}, c.ownerInfo)
-	if err != nil {
+	if _, err := controller.CreateBootstrapPeerSecret(c.context, c.ClusterInfo, &cephv1.CephCluster{ObjectMeta: metav1.ObjectMeta{Name: c.namespacedName.Name, Namespace: c.Namespace}}, c.ownerInfo); err != nil {
 		return errors.Wrap(err, "failed to create cluster rbd bootstrap peer token")
 	}
 
 	return nil
+}
+
+func (c *cluster) updateConfigStoreFromCRD() error {
+	monStore := config.GetMonStore(c.context, c.ClusterInfo)
+	return monStore.SetAllMultiple(c.Spec.CephConfig)
 }
 
 func (c *cluster) reportTelemetry() {
@@ -528,8 +511,14 @@ func (c *cluster) reportTelemetry() {
 	telemetryMutex.Lock()
 	defer telemetryMutex.Unlock()
 
-	// Identify this as a rook cluster for Ceph telemetry by setting the Rook version.
+	reportClusterTelemetry(c)
+	reportNodeTelemetry(c)
+}
+
+func reportClusterTelemetry(c *cluster) {
 	logger.Info("reporting cluster telemetry")
+
+	// Identify this as a rook cluster for Ceph telemetry by setting the Rook version.
 	telemetry.ReportKeyValue(c.context, c.ClusterInfo, telemetry.RookVersionKey, rookversion.Version)
 
 	// Report the K8s version
@@ -575,6 +564,58 @@ func (c *cluster) reportTelemetry() {
 
 	// Set the telemetry for external cluster settings
 	telemetry.ReportKeyValue(c.context, c.ClusterInfo, telemetry.ExternalModeEnabledKey, strconv.FormatBool(c.Spec.External.Enable))
+}
+
+func reportNodeTelemetry(c *cluster) {
+	logger.Info("reporting node telemetry")
+	operatorNamespace := os.Getenv(k8sutil.PodNamespaceEnvVar)
+
+	// Report the K8sNodeCount
+	nodelist, err := c.context.Clientset.CoreV1().Nodes().List(c.ClusterInfo.Context, metav1.ListOptions{})
+	if err != nil {
+		logger.Warningf("failed to report the K8s node count. %v", err)
+	} else {
+		telemetry.ReportKeyValue(c.context, c.ClusterInfo, telemetry.K8sNodeCount, strconv.Itoa(len(nodelist.Items)))
+	}
+
+	// Report the cephNodeCount
+	if c.Spec.CrashCollector.Disable {
+		telemetry.ReportKeyValue(c.context, c.ClusterInfo, telemetry.CephNodeCount, "-1")
+	} else {
+		listoption := metav1.ListOptions{LabelSelector: fmt.Sprintf("%s=%s", k8sutil.AppAttr, nodedaemon.CrashCollectorAppName)}
+		cephNodeList, err := c.context.Clientset.CoreV1().Pods(c.Namespace).List(c.ClusterInfo.Context, listoption)
+		if err != nil {
+			logger.Warningf("failed to report the ceph node count. %v", err)
+		} else {
+			telemetry.ReportKeyValue(c.context, c.ClusterInfo, telemetry.CephNodeCount, strconv.Itoa(len(cephNodeList.Items)))
+		}
+	}
+	// Report the csi rbd node count
+	listoption := metav1.ListOptions{LabelSelector: fmt.Sprintf("%s=%s", k8sutil.AppAttr, csi.CsiRBDPlugin)}
+	cephRbdNodelist, err := c.context.Clientset.CoreV1().Pods(operatorNamespace).List(c.ClusterInfo.Context, listoption)
+	if err != nil {
+		logger.Warningf("failed to report the ceph rbd node count. %v", err)
+	} else {
+		telemetry.ReportKeyValue(c.context, c.ClusterInfo, telemetry.RBDNodeCount, strconv.Itoa(len(cephRbdNodelist.Items)))
+	}
+
+	// Report the csi cephfs node count
+	listoption = metav1.ListOptions{LabelSelector: fmt.Sprintf("%s=%s", k8sutil.AppAttr, csi.CsiCephFSPlugin)}
+	cephFSNodelist, err := c.context.Clientset.CoreV1().Pods(operatorNamespace).List(c.ClusterInfo.Context, listoption)
+	if err != nil {
+		logger.Warningf("failed to report the ceph cephfs node count. %v", err)
+	} else {
+		telemetry.ReportKeyValue(c.context, c.ClusterInfo, telemetry.CephFSNodeCount, strconv.Itoa(len(cephFSNodelist.Items)))
+	}
+
+	// Report the csi nfs node count
+	listoption = metav1.ListOptions{LabelSelector: fmt.Sprintf("%s=%s", k8sutil.AppAttr, csi.CsiNFSPlugin)}
+	cephNFSNodelist, err := c.context.Clientset.CoreV1().Pods(operatorNamespace).List(c.ClusterInfo.Context, listoption)
+	if err != nil {
+		logger.Warningf("failed to report the ceph nfs node count. %v", err)
+	} else {
+		telemetry.ReportKeyValue(c.context, c.ClusterInfo, telemetry.NFSNodeCount, strconv.Itoa(len(cephNFSNodelist.Items)))
+	}
 }
 
 func (c *cluster) configureMsgr2() error {

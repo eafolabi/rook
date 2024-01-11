@@ -145,6 +145,10 @@ spec:
             - "--namespace=$(POD_NAMESPACE)"
             - "--pod-uid=$(POD_UID)"
             - "--stagingpath={{ .KubeletDirPath }}/plugins/kubernetes.io/csi/"
+            - "--leader-election-namespace={{ .Namespace }}"
+            - "--leader-election-lease-duration=137s"
+            - "--leader-election-renew-deadline=107s"
+            - "--leader-election-retry-period=26s"
           ports:
             - containerPort: {{ .CSIAddonsPort }}
           env:
@@ -181,9 +185,6 @@ spec:
             - "--controllerserver=true"
             - "--drivername={{ .DriverNamePrefix }}rbd.csi.ceph.com"
             - "--pidlimit=-1"
-            - "--metricsport={{ .RBDGRPCMetricsPort }}"
-            - "--metricspath=/metrics"
-            - "--enablegrpcmetrics={{ .EnableCSIGRPCMetrics }}"
             {{ if .EnableCSIAddonsSideCar }}
             - "--csi-addons-endpoint=$(CSIADDONS_ENDPOINT)"
             {{ end }}

@@ -24,14 +24,13 @@ until all the daemons have been updated.
 
 ## Supported Versions
 
-Rook v1.12 supports the following Ceph versions:
+Rook v1.13 supports the following Ceph versions:
 
 * Ceph Reef v18.2.0 or newer
 * Ceph Quincy v17.2.0 or newer
-* Ceph Pacific v16.2.7 or newer
 
-Support for Ceph Pacific (16.2.x) will be removed in the next Rook release. It will be mandatory to
-upgrade to Quincy or Reef before upgrading to the Rook release after v1.12.x.
+Support for Ceph Pacific (16.2.x) is removed in Rook v1.13. Upgrade to Quincy or Reef before upgrading
+to Rook v1.13.
 
 !!! important
     When an update is requested, the operator will check Ceph's status,
@@ -64,7 +63,7 @@ Official Ceph container images can be found on [Quay](https://quay.io/repository
 
 These images are tagged in a few ways:
 
-* The most explicit form of tags are full-ceph-version-and-build tags (e.g., `v17.2.6-20230410`).
+* The most explicit form of tags are full-ceph-version-and-build tags (e.g., `v17.2.6-20231027`).
   These tags are recommended for production clusters, as there is no possibility for the cluster to
   be heterogeneous with respect to the version of Ceph running in containers.
 * Ceph major version tags (e.g., `v17`) are useful for development and test clusters so that the
@@ -81,7 +80,7 @@ CephCluster CRD (`spec.cephVersion.image`).
 
 ```console
 ROOK_CLUSTER_NAMESPACE=rook-ceph
-NEW_CEPH_IMAGE='quay.io/ceph/ceph:v17.2.6-20230410'
+NEW_CEPH_IMAGE='quay.io/ceph/ceph:v17.2.6-20231027'
 kubectl -n $ROOK_CLUSTER_NAMESPACE patch CephCluster $ROOK_CLUSTER_NAMESPACE --type=merge -p "{\"spec\": {\"cephVersion\": {\"image\": \"$NEW_CEPH_IMAGE\"}}}"
 ```
 
@@ -93,7 +92,7 @@ employed by the new Rook operator release. Employing an outdated Ceph version wi
 in unexpected behaviour.
 
 ```console
-kubectl -n rook-ceph set image deploy/rook-ceph-tools rook-ceph-tools=quay.io/ceph/ceph:v17.2.6-20230410
+kubectl -n rook-ceph set image deploy/rook-ceph-tools rook-ceph-tools=quay.io/ceph/ceph:v17.2.6-20231027
 ```
 
 #### **3. Wait for the pod updates**
@@ -110,7 +109,7 @@ Confirm the upgrade is completed when the versions are all on the desired Ceph v
 ```console
 kubectl -n $ROOK_CLUSTER_NAMESPACE get deployment -l rook_cluster=$ROOK_CLUSTER_NAMESPACE -o jsonpath='{range .items[*]}{"ceph-version="}{.metadata.labels.ceph-version}{"\n"}{end}' | sort | uniq
 This cluster is not yet finished:
-    ceph-version=15.2.13-0
+    ceph-version=v16.2.14-0
     ceph-version=v17.2.6-0
 This cluster is finished:
     ceph-version=v17.2.6-0

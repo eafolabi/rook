@@ -27,6 +27,7 @@ import (
 	cephv1 "github.com/rook/rook/pkg/apis/ceph.rook.io/v1"
 	cephclient "github.com/rook/rook/pkg/daemon/ceph/client"
 	cephutil "github.com/rook/rook/pkg/daemon/ceph/util"
+	"github.com/rook/rook/pkg/operator/ceph/config"
 	"github.com/rook/rook/pkg/operator/ceph/controller"
 	"github.com/rook/rook/pkg/operator/ceph/version"
 	"github.com/rook/rook/pkg/operator/k8sutil"
@@ -164,7 +165,7 @@ func (c *Cluster) checkHealth(ctx context.Context) error {
 		return errors.New("skipping mon health check since there are no monitors")
 	}
 
-	monsToSkipReconcile, err := c.getMonsToSkipReconcile()
+	monsToSkipReconcile, err := controller.GetDaemonsToSkipReconcile(c.ClusterInfo.Context, c.context, c.ClusterInfo.Namespace, config.MonType, AppName)
 	if err != nil {
 		return errors.Wrap(err, "failed to check for mons to skip reconcile")
 	}
@@ -366,30 +367,17 @@ func (c *Cluster) checkHealth(ctx context.Context) error {
 		}
 	}
 
-	// failover mons running on host path to use persistent volumes if VolumeClaimTemplate is set and vice versa
+	// failover any mons present in the mon fail over list
 	for _, mon := range c.ClusterInfo.Monitors {
-		if c.HasMonPathChanged(mon.Name) {
-			logger.Infof("fail over mon %q due to change in mon path", mon.Name)
+		if c.monsToFailover.Has(mon.Name) {
+			logger.Infof("fail over mon %q from the mon fail over list", mon.Name)
 			c.failMon(len(c.ClusterInfo.Monitors), desiredMonCount, mon.Name)
+			c.monsToFailover.Delete(mon.Name)
 			return nil
 		}
 	}
 
 	return nil
-}
-
-// HasMonPathChanged checks if the mon storage path has changed from host path to persistent volume or vice versa
-func (c *Cluster) HasMonPathChanged(mon string) bool {
-	var monPathChanged bool
-	if c.mapping.Schedule[mon] != nil && c.spec.Mon.VolumeClaimTemplate != nil {
-		logger.Infof("mon %q path has changed from host path to persistent volumes", mon)
-		monPathChanged = true
-	} else if c.mapping.Schedule[mon] == nil && c.spec.Mon.VolumeClaimTemplate == nil {
-		logger.Infof("mon %q path has changed from persistent volumes to host path", mon)
-		monPathChanged = true
-	}
-
-	return monPathChanged
 }
 
 func (c *Cluster) trackMonInOrOutOfQuorum(monName string, inQuorum bool) (bool, error) {

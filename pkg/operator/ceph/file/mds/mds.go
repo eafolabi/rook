@@ -127,13 +127,24 @@ func (c *Cluster) Start() error {
 	// Always create double the number of metadata servers to have standby mdses available
 	replicas := c.fs.Spec.MetadataServer.ActiveCount * 2
 
+	mdsToSkipReconcile, err := controller.GetDaemonsToSkipReconcile(c.clusterInfo.Context, c.context, c.clusterInfo.Namespace, config.MdsType, AppName)
+	if err != nil {
+		return errors.Wrap(err, "failed to check for mds to skip reconcile")
+	}
+
 	// keep list of deployments we want so unwanted ones can be deleted later
 	desiredDeployments := map[string]bool{} // improvised set
 	// Create/update deployments
 	for i := 0; i < int(replicas); i++ {
-		deployment, err := c.startDeployment(c.clusterInfo.Context, k8sutil.IndexToName(i))
+		mdsDaemonName := k8sutil.IndexToName(i)
+		if mdsToSkipReconcile.Has(mdsDaemonName) {
+			logger.Warningf("skipping reconcile for mds daemon %q with %q label", mdsDaemonName, cephv1.SkipReconcileLabelKey)
+			return nil
+		}
+
+		deployment, err := c.startDeployment(c.clusterInfo.Context, mdsDaemonName)
 		if err != nil {
-			return errors.Wrapf(err, "failed to start deployment for MDS %q for filesystem %q", k8sutil.IndexToName(i), c.fs.Name)
+			return errors.Wrapf(err, "failed to start deployment for MDS %q for filesystem %q", mdsDaemonName, c.fs.Name)
 		}
 		desiredDeployments[deployment] = true
 	}
@@ -247,8 +258,7 @@ func (c *Cluster) upgradeMDS() error {
 		return errors.Wrap(err, "failed to setting allow_standby_replay to false")
 	}
 
-	// In Pacific, standby-replay daemons are stopped automatically. Older versions of Ceph require
-	// us to stop these daemons manually.
+	// Standby-replay daemons are stopped automatically.
 	if err := cephclient.FailAllStandbyReplayMDS(c.context, c.clusterInfo, c.fs.Name); err != nil {
 		return errors.Wrap(err, "failed to fail mds agent in up:standby-replay state")
 	}

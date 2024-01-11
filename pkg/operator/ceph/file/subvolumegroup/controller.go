@@ -255,10 +255,23 @@ func (r *ReconcileCephFilesystemSubVolumeGroup) reconcile(request reconcile.Requ
 	if err != nil {
 		return reconcile.Result{}, errors.Wrap(err, "failed to save cluster config")
 	}
+
+	err = cephclient.PinCephFSSubVolumeGroup(r.context, r.clusterInfo, cephFilesystemSubVolumeGroup.Spec.FilesystemName, cephFilesystemSubVolumeGroup, getSubvolumeGroupName(cephFilesystemSubVolumeGroup))
+	if err != nil {
+		return reconcile.Result{}, errors.Wrapf(err, "failed to pin filesystem subvolume group %q", cephFilesystemSubVolumeGroup.Name)
+	}
+
 	r.updateStatus(observedGeneration, request.NamespacedName, cephv1.ConditionReady)
 	// Return and do not requeue
 	logger.Debugf("done reconciling cephFilesystemSubVolumeGroup %q", namespacedName)
 	return reconcile.Result{}, nil
+}
+
+func getSubvolumeGroupName(cephFilesystemSubVolumeGroup *cephv1.CephFilesystemSubVolumeGroup) string {
+	if cephFilesystemSubVolumeGroup.Spec.Name != "" {
+		return cephFilesystemSubVolumeGroup.Spec.Name
+	}
+	return cephFilesystemSubVolumeGroup.Name
 }
 
 func (r *ReconcileCephFilesystemSubVolumeGroup) updateClusterConfig(cephFilesystemSubVolumeGroup *cephv1.CephFilesystemSubVolumeGroup, cephCluster cephv1.CephCluster) error {
@@ -269,8 +282,11 @@ func (r *ReconcileCephFilesystemSubVolumeGroup) updateClusterConfig(cephFilesyst
 		Namespace: r.clusterInfo.Namespace,
 		Monitors:  csi.MonEndpoints(r.clusterInfo.Monitors, cephCluster.Spec.RequireMsgr2()),
 		CephFS: &csi.CsiCephFSSpec{
-			SubvolumeGroup: cephFilesystemSubVolumeGroup.Name,
+			SubvolumeGroup:     getSubvolumeGroupName(cephFilesystemSubVolumeGroup),
+			KernelMountOptions: r.clusterInfo.CSIDriverSpec.CephFS.KernelMountOptions,
+			FuseMountOptions:   r.clusterInfo.CSIDriverSpec.CephFS.FuseMountOptions,
 		},
+		ReadAffinity: &r.clusterInfo.CSIDriverSpec.ReadAffinity,
 	}
 
 	// If the cluster has Multus enabled we need to append the network namespace of the driver's
@@ -294,7 +310,7 @@ func (r *ReconcileCephFilesystemSubVolumeGroup) updateClusterConfig(cephFilesyst
 func (r *ReconcileCephFilesystemSubVolumeGroup) createOrUpdateSubVolumeGroup(cephFilesystemSubVolumeGroup *cephv1.CephFilesystemSubVolumeGroup) error {
 	logger.Infof("creating ceph filesystem subvolume group %s in namespace %s", cephFilesystemSubVolumeGroup.Name, cephFilesystemSubVolumeGroup.Namespace)
 
-	err := cephclient.CreateCephFSSubVolumeGroup(r.context, r.clusterInfo, cephFilesystemSubVolumeGroup.Spec.FilesystemName, cephFilesystemSubVolumeGroup.Name)
+	err := cephclient.CreateCephFSSubVolumeGroup(r.context, r.clusterInfo, cephFilesystemSubVolumeGroup.Spec.FilesystemName, getSubvolumeGroupName(cephFilesystemSubVolumeGroup))
 	if err != nil {
 		return errors.Wrapf(err, "failed to create ceph filesystem subvolume group %q", cephFilesystemSubVolumeGroup.Name)
 	}
@@ -306,7 +322,7 @@ func (r *ReconcileCephFilesystemSubVolumeGroup) createOrUpdateSubVolumeGroup(cep
 func (r *ReconcileCephFilesystemSubVolumeGroup) deleteSubVolumeGroup(cephFilesystemSubVolumeGroup *cephv1.CephFilesystemSubVolumeGroup) error {
 	namespacedName := fmt.Sprintf("%s/%s", cephFilesystemSubVolumeGroup.Namespace, cephFilesystemSubVolumeGroup.Name)
 	logger.Infof("deleting ceph filesystem subvolume group object %q", namespacedName)
-	if err := cephclient.DeleteCephFSSubVolumeGroup(r.context, r.clusterInfo, cephFilesystemSubVolumeGroup.Spec.FilesystemName, cephFilesystemSubVolumeGroup.Name); err != nil {
+	if err := cephclient.DeleteCephFSSubVolumeGroup(r.context, r.clusterInfo, cephFilesystemSubVolumeGroup.Spec.FilesystemName, getSubvolumeGroupName(cephFilesystemSubVolumeGroup)); err != nil {
 		code, ok := exec.ExitStatus(err)
 		// If the subvolume group does not exit, we should not return an error
 		if ok && code == int(syscall.ENOENT) {
@@ -354,6 +370,6 @@ func (r *ReconcileCephFilesystemSubVolumeGroup) updateStatus(observedGeneration 
 }
 
 func buildClusterID(cephFilesystemSubVolumeGroup *cephv1.CephFilesystemSubVolumeGroup) string {
-	clusterID := fmt.Sprintf("%s-%s-file-%s", cephFilesystemSubVolumeGroup.Namespace, cephFilesystemSubVolumeGroup.Spec.FilesystemName, cephFilesystemSubVolumeGroup.Name)
+	clusterID := fmt.Sprintf("%s-%s-file-%s", cephFilesystemSubVolumeGroup.Namespace, cephFilesystemSubVolumeGroup.Spec.FilesystemName, getSubvolumeGroupName(cephFilesystemSubVolumeGroup))
 	return k8sutil.Hash(clusterID)
 }

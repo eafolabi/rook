@@ -36,6 +36,15 @@ spec:
                 blockPoolName:
                   description: BlockPoolName is the name of Ceph BlockPool. Typically it's the name of the CephBlockPool CR.
                   type: string
+                  x-kubernetes-validations:
+                    - message: blockPoolName is immutable
+                      rule: self == oldSelf
+                name:
+                  description: The name of the CephBlockPoolRadosNamespaceSpec namespace. If not set, the default is the name of the CR.
+                  type: string
+                  x-kubernetes-validations:
+                    - message: name is immutable
+                      rule: self == oldSelf
               required:
                 - blockPoolName
               type: object
@@ -673,7 +682,7 @@ spec:
                           description: Indicate whether the server certificate is validated by the client or not
                           type: boolean
                         sendCloudEvents:
-                          description: 'Send the notifications with the CloudEvents header: https://github.com/cloudevents/spec/blob/main/cloudevents/adapters/aws-s3.md Supported for Ceph Quincy (v17) or newer.'
+                          description: 'Send the notifications with the CloudEvents header: https://github.com/cloudevents/spec/blob/main/cloudevents/adapters/aws-s3.md'
                           type: boolean
                         uri:
                           description: The URI of the HTTP endpoint to push notification to
@@ -895,6 +904,14 @@ spec:
                   nullable: true
                   type: object
                   x-kubernetes-preserve-unknown-fields: true
+                cephConfig:
+                  additionalProperties:
+                    additionalProperties:
+                      type: string
+                    type: object
+                  description: Ceph Config options
+                  nullable: true
+                  type: object
                 cephVersion:
                   description: The version information that instructs Rook to orchestrate a particular version of Ceph.
                   nullable: true
@@ -962,6 +979,32 @@ spec:
                       description: Disable determines whether we should enable the crash collector
                       type: boolean
                   type: object
+                csi:
+                  description: CSI Driver Options applied per cluster.
+                  properties:
+                    cephfs:
+                      description: CephFS defines CSI Driver settings for CephFS driver.
+                      properties:
+                        fuseMountOptions:
+                          description: FuseMountOptions defines the mount options for ceph fuse mounter.
+                          type: string
+                        kernelMountOptions:
+                          description: KernelMountOptions defines the mount options for kernel mounter.
+                          type: string
+                      type: object
+                    readAffinity:
+                      description: ReadAffinity defines the read affinity settings for CSI driver.
+                      properties:
+                        crushLocationLabels:
+                          description: CrushLocationLabels defines which node labels to use as CRUSH location. This should correspond to the values set in the CRUSH map.
+                          items:
+                            type: string
+                          type: array
+                        enabled:
+                          description: Enables read affinity for CSI driver.
+                          type: boolean
+                      type: object
+                  type: object
                 dashboard:
                   description: Dashboard settings
                   nullable: true
@@ -991,6 +1034,9 @@ spec:
                   description: The path on the host where config and data can be persisted
                   pattern: ^/(\S+)
                   type: string
+                  x-kubernetes-validations:
+                    - message: DataDirHostPath is immutable
+                      rule: self == oldSelf
                 disruptionManagement:
                   description: A spec for configuring disruption management.
                   nullable: true
@@ -1012,6 +1058,9 @@ spec:
                       description: PGHealthCheckTimeout is the time (in minutes) that the operator will wait for the placement groups to become healthy (active+clean) after a drain was completed and OSDs came back up. Rook will continue with the next drain if the timeout exceeds. It only works if managePodBudgets is true. No values or 0 means that the operator will wait until the placement groups are healthy before unblocking the next drain.
                       format: int64
                       type: integer
+                    pgHealthyRegex:
+                      description: PgHealthyRegex is the regular expression that is used to determine which PG states should be considered healthy. The default is `^(active\+clean|active\+clean\+scrubbing|active\+clean\+scrubbing\+deep)$`
+                      type: string
                   type: object
                 external:
                   description: Whether the Ceph Cluster is running external to this Kubernetes cluster mon, mgr, osd, mds, and discover daemons will not be created for external clusters.
@@ -2057,6 +2106,11 @@ spec:
                         type: object
                       type: array
                   type: object
+                  x-kubernetes-validations:
+                    - message: zones must be less than or equal to count
+                      rule: '!has(self.zones) || (has(self.zones) && (size(self.zones) <= self.count))'
+                    - message: stretchCluster zones must be equal to 3
+                      rule: '!has(self.stretchCluster) || (has(self.stretchCluster) && (size(self.stretchCluster.zones) > 0) && (size(self.stretchCluster.zones) == 3))'
                 monitoring:
                   description: Prometheus based Monitoring settings
                   nullable: true
@@ -2159,7 +2213,7 @@ spec:
                           nullable: true
                           properties:
                             enabled:
-                              description: Whether to compress the data in transit across the wire. The default is not set. Requires Ceph Quincy (v17) or newer.
+                              description: Whether to compress the data in transit across the wire. The default is not set.
                               type: boolean
                           type: object
                         encryption:
@@ -2178,7 +2232,7 @@ spec:
                       description: DualStack determines whether Ceph daemons should listen on both IPv4 and IPv6
                       type: boolean
                     hostNetwork:
-                      description: HostNetwork to enable host network
+                      description: HostNetwork to enable host network. If host networking is enabled or disabled on a running cluster, then the operator will automatically fail over all the mons to apply the new network settings.
                       type: boolean
                     ipFamily:
                       description: IPFamily is the single stack IPv6 or IPv4 protocol
@@ -2198,13 +2252,16 @@ spec:
                           type: boolean
                       type: object
                     provider:
-                      description: Provider is what provides network connectivity to the cluster e.g. "host" or "multus"
+                      description: Provider is what provides network connectivity to the cluster e.g. "host" or "multus". If the Provider is updated from being empty to "host" on a running cluster, then the operator will automatically fail over all the mons to apply the "host" network settings.
                       enum:
                         - ""
                         - host
                         - multus
                       nullable: true
                       type: string
+                      x-kubernetes-validations:
+                        - message: network provider must be disabled (reverted to empty string) before a new provider is enabled
+                          rule: self == '' || self == oldSelf
                     selectors:
                       additionalProperties:
                         type: string
@@ -2213,6 +2270,9 @@ spec:
                       type: object
                   type: object
                   x-kubernetes-preserve-unknown-fields: true
+                  x-kubernetes-validations:
+                    - message: at least one network selector must be specified when using multus
+                      rule: '!has(self.provider) || (self.provider != ''multus'' || (self.provider == ''multus'' && size(self.selectors) > 0))'
                 placement:
                   additionalProperties:
                     description: Placement is the placement for an object
@@ -7933,6 +7993,37 @@ spec:
                 filesystemName:
                   description: FilesystemName is the name of Ceph Filesystem SubVolumeGroup volume name. Typically it's the name of the CephFilesystem CR. If not coming from the CephFilesystem CR, it can be retrieved from the list of Ceph Filesystem volumes with `ceph fs volume ls`. To learn more about Ceph Filesystem abstractions see https://docs.ceph.com/en/latest/cephfs/fs-volumes/#fs-volumes-and-subvolumes
                   type: string
+                  x-kubernetes-validations:
+                    - message: filesystemName is immutable
+                      rule: self == oldSelf
+                name:
+                  description: The name of the subvolume group. If not set, the default is the name of the subvolumeGroup CR.
+                  type: string
+                  x-kubernetes-validations:
+                    - message: name is immutable
+                      rule: self == oldSelf
+                pinning:
+                  description: Pinning configuration of CephFilesystemSubVolumeGroup, reference https://docs.ceph.com/en/latest/cephfs/fs-volumes/#pinning-subvolumes-and-subvolume-groups only one out of (export, distributed, random) can be set at a time
+                  properties:
+                    distributed:
+                      maximum: 1
+                      minimum: 0
+                      nullable: true
+                      type: integer
+                    export:
+                      maximum: 256
+                      minimum: -1
+                      nullable: true
+                      type: integer
+                    random:
+                      maximum: 1
+                      minimum: 0
+                      nullable: true
+                      type: number
+                  type: object
+                  x-kubernetes-validations:
+                    - message: only one pinning type should be set
+                      rule: (has(self.export) && !has(self.distributed) && !has(self.random)) || (!has(self.export) && has(self.distributed) && !has(self.random)) || (!has(self.export) && !has(self.distributed) && has(self.random)) || (!has(self.export) && !has(self.distributed) && !has(self.random))
               required:
                 - filesystemName
               type: object
@@ -8002,10 +8093,10 @@ spec:
                   nullable: true
                   properties:
                     namespace:
-                      description: The namespace inside the Ceph pool (set by 'pool') where shared NFS-Ganesha config is stored. This setting is required for Ceph v15 and ignored for Ceph v16. As of Ceph Pacific v16+, this is internally set to the name of the CephNFS.
+                      description: The namespace inside the Ceph pool (set by 'pool') where shared NFS-Ganesha config is stored. This setting is deprecated as it is internally set to the name of the CephNFS.
                       type: string
                     pool:
-                      description: The Ceph pool used store the shared configuration for NFS-Ganesha daemons. This setting is required for Ceph v15 and ignored for Ceph v16. As of Ceph Pacific 16.2.7+, this is internally hardcoded to ".nfs".
+                      description: The Ceph pool used store the shared configuration for NFS-Ganesha daemons. This setting is deprecated, as it is internally required to be ".nfs".
                       type: string
                   type: object
                 security:

@@ -114,6 +114,11 @@ func (c *Cluster) Start() error {
 	daemonIDs := c.getDaemonIDs()
 	var deploymentsToWaitFor []*v1.Deployment
 
+	mgrsToSkipReconcile, err := controller.GetDaemonsToSkipReconcile(c.clusterInfo.Context, c.context, c.clusterInfo.Namespace, config.MgrType, AppName)
+	if err != nil {
+		return errors.Wrap(err, "failed to check for mgrs to skip reconcile")
+	}
+
 	for _, daemonID := range daemonIDs {
 		if c.clusterInfo.Context.Err() != nil {
 			return c.clusterInfo.Context.Err()
@@ -144,15 +149,25 @@ func (c *Cluster) Start() error {
 			return errors.Wrapf(err, "failed to set annotation for deployment %q", d.Name)
 		}
 
+		if mgrsToSkipReconcile.Has(daemonID) {
+			logger.Warningf("Skipping reconcile of mgr %q labeled with %q", daemonID, cephv1.SkipReconcileLabelKey)
+			continue
+		}
+
 		newDeployment, err := c.context.Clientset.AppsV1().Deployments(c.clusterInfo.Namespace).Create(c.clusterInfo.Context, d, metav1.CreateOptions{})
 		if err != nil {
 			if !kerrors.IsAlreadyExists(err) {
 				return errors.Wrapf(err, "failed to create mgr deployment %s", resourceName)
 			}
 			logger.Infof("deployment for mgr %s already exists. updating if needed", resourceName)
-
-			if err := updateDeploymentAndWait(c.context, c.clusterInfo, d, config.MgrType, mgrConfig.DaemonID, c.spec.SkipUpgradeChecks, false); err != nil {
+			if err := updateDeploymentAndWait(c.context, c.clusterInfo, d, config.MgrType, mgrConfig.DaemonID, c.spec.SkipUpgradeChecks, c.spec.ContinueUpgradeAfterChecksEvenIfNotHealthy); err != nil {
 				logger.Errorf("failed to update mgr deployment %q. %v", resourceName, err)
+				if c.spec.ContinueUpgradeAfterChecksEvenIfNotHealthy {
+					logger.Infof("continuing reconcile of ceph cluster in namespace %s after error waiting for mgr because continueUpgradeAfterChecksEvenIfNotHealthy is true", c.clusterInfo.Namespace)
+				} else {
+					logger.Infof("stopping reconcile of ceph cluster in namespace %s after error waiting for mgr because continueUpgradeAfterChecksEvenIfNotHealthy is false", c.clusterInfo.Namespace)
+					return errors.Wrapf(err, "failed to update mgr deployment %q", resourceName)
+				}
 			}
 		} else {
 			// wait for the new deployment
