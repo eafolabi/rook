@@ -46,7 +46,6 @@ type Param struct {
 	SnapshotterImage                         string
 	ResizerImage                             string
 	DriverNamePrefix                         string
-	EnableCSIGRPCMetrics                     string
 	KubeletDirPath                           string
 	ForceCephFSKernelClient                  string
 	CephFSKernelMountOptions                 string
@@ -83,9 +82,7 @@ type Param struct {
 	NFSAttachRequired                        bool
 	LogLevel                                 uint8
 	SidecarLogLevel                          uint8
-	CephFSGRPCMetricsPort                    uint16
 	CephFSLivenessMetricsPort                uint16
-	RBDGRPCMetricsPort                       uint16
 	CSIAddonsPort                            uint16
 	RBDLivenessMetricsPort                   uint16
 	ProvisionerReplicas                      int32
@@ -115,7 +112,6 @@ var (
 	EnableRBD                 = false
 	EnableCephFS              = false
 	EnableNFS                 = false
-	EnableCSIGRPCMetrics      = false
 	AllowUnsupported          = false
 	CustomCSICephConfigExists = false
 
@@ -135,13 +131,13 @@ var (
 // manually challenging.
 var (
 	// image names
-	DefaultCSIPluginImage   = "quay.io/cephcsi/cephcsi:v3.9.0"
-	DefaultRegistrarImage   = "registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.8.0"
-	DefaultProvisionerImage = "registry.k8s.io/sig-storage/csi-provisioner:v3.5.0"
-	DefaultAttacherImage    = "registry.k8s.io/sig-storage/csi-attacher:v4.3.0"
-	DefaultSnapshotterImage = "registry.k8s.io/sig-storage/csi-snapshotter:v6.2.2"
-	DefaultResizerImage     = "registry.k8s.io/sig-storage/csi-resizer:v1.8.0"
-	DefaultCSIAddonsImage   = "quay.io/csiaddons/k8s-sidecar:v0.7.0"
+	DefaultCSIPluginImage   = "quay.io/cephcsi/cephcsi:v3.10.1"
+	DefaultRegistrarImage   = "registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.9.1"
+	DefaultProvisionerImage = "registry.k8s.io/sig-storage/csi-provisioner:v3.6.2"
+	DefaultAttacherImage    = "registry.k8s.io/sig-storage/csi-attacher:v4.4.2"
+	DefaultSnapshotterImage = "registry.k8s.io/sig-storage/csi-snapshotter:v6.3.2"
+	DefaultResizerImage     = "registry.k8s.io/sig-storage/csi-resizer:v1.9.2"
+	DefaultCSIAddonsImage   = "quay.io/csiaddons/k8s-sidecar:v0.8.0"
 
 	// image pull policy
 	DefaultCSIImagePullPolicy = string(corev1.PullIfNotPresent)
@@ -248,9 +244,9 @@ const (
 	onDelete      = "OnDelete"
 
 	// driver daemonset names
-	csiRBDPlugin    = "csi-rbdplugin"
-	csiCephFSPlugin = "csi-cephfsplugin"
-	csiNFSPlugin    = "csi-nfsplugin"
+	CsiRBDPlugin    = "csi-rbdplugin"
+	CsiCephFSPlugin = "csi-cephfsplugin"
+	CsiNFSPlugin    = "csi-nfsplugin"
 
 	// driver deployment names
 	csiRBDProvisioner    = "csi-rbdplugin-provisioner"
@@ -321,7 +317,7 @@ func (r *ReconcileCSI) startDrivers(ver *version.Info, ownerInfo *k8sutil.OwnerI
 		}
 
 		// Create service if either liveness or GRPC metrics are enabled.
-		if CSIParam.EnableLiveness || EnableCSIGRPCMetrics {
+		if CSIParam.EnableLiveness {
 			rbdService, err = templateToService("rbd-service", RBDPluginServiceTemplatePath, tp)
 			if err != nil {
 				return errors.Wrap(err, "failed to load rbd plugin service template")
@@ -348,7 +344,7 @@ func (r *ReconcileCSI) startDrivers(ver *version.Info, ownerInfo *k8sutil.OwnerI
 			return errors.Wrap(err, "failed to load rbd provisioner deployment template")
 		}
 		// Create service if either liveness or GRPC metrics are enabled.
-		if CSIParam.EnableLiveness || EnableCSIGRPCMetrics {
+		if CSIParam.EnableLiveness {
 			cephfsService, err = templateToService("cephfs-service", CephFSPluginServiceTemplatePath, tp)
 			if err != nil {
 				return errors.Wrap(err, "failed to load cephfs plugin service template")
@@ -656,7 +652,7 @@ func (r *ReconcileCSI) stopDrivers(ver *version.Info) error {
 
 	if !EnableRBD {
 		logger.Info("CSI Ceph RBD driver disabled")
-		err := r.deleteCSIDriverResources(ver, csiRBDPlugin, csiRBDProvisioner, "csi-rbdplugin-metrics", RBDDriverName)
+		err := r.deleteCSIDriverResources(ver, CsiRBDPlugin, csiRBDProvisioner, "csi-rbdplugin-metrics", RBDDriverName)
 		if err != nil {
 			return errors.Wrap(err, "failed to remove CSI Ceph RBD driver")
 		}
@@ -665,7 +661,7 @@ func (r *ReconcileCSI) stopDrivers(ver *version.Info) error {
 
 	if !EnableCephFS {
 		logger.Info("CSI CephFS driver disabled")
-		err := r.deleteCSIDriverResources(ver, csiCephFSPlugin, csiCephFSProvisioner, "csi-cephfsplugin-metrics", CephFSDriverName)
+		err := r.deleteCSIDriverResources(ver, CsiCephFSPlugin, csiCephFSProvisioner, "csi-cephfsplugin-metrics", CephFSDriverName)
 		if err != nil {
 			return errors.Wrap(err, "failed to remove CSI CephFS driver")
 		}
@@ -674,7 +670,7 @@ func (r *ReconcileCSI) stopDrivers(ver *version.Info) error {
 
 	if !EnableNFS {
 		logger.Info("CSI NFS driver disabled")
-		err := r.deleteCSIDriverResources(ver, csiNFSPlugin, csiNFSProvisioner, "csi-nfsplugin-metrics", NFSDriverName)
+		err := r.deleteCSIDriverResources(ver, CsiNFSPlugin, csiNFSProvisioner, "csi-nfsplugin-metrics", NFSDriverName)
 		if err != nil {
 			return errors.Wrap(err, "failed to remove CSI NFS driver")
 		}
@@ -713,9 +709,9 @@ func (r *ReconcileCSI) applyCephClusterNetworkConfig(ctx context.Context, object
 	if err != nil {
 		return errors.Wrap(err, "failed to find CephClusters")
 	}
-	for _, cephCluster := range cephClusters.Items {
+	for i, cephCluster := range cephClusters.Items {
 		if cephCluster.Spec.Network.IsMultus() {
-			err = k8sutil.ApplyMultus(cephCluster.GetNamespace(), &cephCluster.Spec.Network, objectMeta)
+			err = k8sutil.ApplyMultus(cephCluster.GetNamespace(), &cephClusters.Items[i].Spec.Network, objectMeta)
 			if err != nil {
 				return errors.Wrapf(err, "failed to apply multus configuration to CephCluster %q", cephCluster.Name)
 			}
@@ -872,8 +868,12 @@ func (r *ReconcileCSI) configureHolder(driver driverDetails, c ClusterDetail, tp
 	clusterConfigEntry := &CsiClusterConfigEntry{
 		Monitors: MonEndpoints(c.clusterInfo.Monitors, c.cluster.Spec.RequireMsgr2()),
 		RBD:      &CsiRBDSpec{},
-		CephFS:   &CsiCephFSSpec{},
-		NFS:      &CsiNFSSpec{},
+		CephFS: &CsiCephFSSpec{
+			FuseMountOptions:   c.clusterInfo.CSIDriverSpec.CephFS.FuseMountOptions,
+			KernelMountOptions: c.clusterInfo.CSIDriverSpec.CephFS.KernelMountOptions,
+		},
+		NFS:          &CsiNFSSpec{},
+		ReadAffinity: &c.clusterInfo.CSIDriverSpec.ReadAffinity,
 	}
 	netNamespaceFilePath := generateNetNamespaceFilePath(CSIParam.KubeletDirPath, driver.fullName, c.cluster.Namespace)
 	if driver.name == RBDDriverShortName {

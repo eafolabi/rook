@@ -70,9 +70,8 @@ var (
 	dataPoolName = "rgw.buckets.data"
 
 	// An user with system privileges for dashboard service
-	DashboardUser                 = "dashboard-admin"
-	rgwPgNumRemovedQuincyVersion  = cephver.CephVersion{Major: 17, Minor: 2, Extra: 2}
-	rgwPgNumRemovedPacificVersion = cephver.CephVersion{Major: 16, Minor: 2, Extra: 11}
+	DashboardUser                = "dashboard-admin"
+	rgwPgNumRemovedQuincyVersion = cephver.CephVersion{Major: 17, Minor: 2, Extra: 2}
 )
 
 type idType struct {
@@ -81,7 +80,7 @@ type idType struct {
 
 type zoneGroupType struct {
 	MasterZoneID string     `json:"master_zone"`
-	IsMaster     string     `json:"is_master"`
+	IsMaster     bool       `json:"is_master"`
 	Zones        []zoneType `json:"zones"`
 	Endpoints    []string   `json:"endpoints"`
 }
@@ -302,12 +301,7 @@ func checkZoneGroupIsMaster(objContext *Context) (bool, error) {
 		return false, errors.Wrap(err, "failed to parse master zone id")
 	}
 
-	zoneGroupIsMaster, err := strconv.ParseBool(zoneGroupJson.IsMaster)
-	if err != nil {
-		return false, errors.Wrap(err, "failed to parse is_master from zone group json into bool")
-	}
-
-	return zoneGroupIsMaster, nil
+	return zoneGroupJson.IsMaster, nil
 }
 
 func DecodeSecret(secret *v1.Secret, keyName string) (string, error) {
@@ -394,55 +388,61 @@ func getZoneEndpoints(objContext *Context, serviceEndpoint string) ([]string, bo
 	return zoneEndpointsList, isEndpointAlreadyExists, nil
 }
 
+func createMultisiteConfigurations(objContext *Context, configType, configTypeArg string, args ...string) error {
+	args = append([]string{configType}, args...)
+	args = append(args, configTypeArg)
+	// get the multisite config before creating
+	output, getConfigErr := RunAdminCommandNoMultisite(objContext, true, configType, "get", configTypeArg)
+	if getConfigErr == nil {
+		return nil
+	}
+
+	if kerrors.IsNotFound(getConfigErr) {
+		// the pod used to exec command (act as a proxy) is not found/ready yet
+		// caller can nicely handle error and not overflow logs with misleading error messages
+		return getConfigErr
+	}
+
+	code, err := exec.ExtractExitCode(getConfigErr)
+	if err != nil {
+		return errorOrIsNotFound(getConfigErr, "'radosgw-admin %q get' failed with code %q, for reason %q, error: (%v)", configType, strconv.Itoa(code), output, string(kerrors.ReasonForError(err)))
+	}
+	// ENOENT means "No such file or directory"
+	if code != int(syscall.ENOENT) {
+		code := strconv.Itoa(code)
+		return errors.Wrapf(getConfigErr, "'radosgw-admin %q get' failed with code %q, for reason %q", configType, code, output)
+	}
+
+	// create the object if it doesn't exist yet
+	output, err = RunAdminCommandNoMultisite(objContext, false, args...)
+	if err != nil {
+		return errorOrIsNotFound(err, "failed to create ceph %q %q, for reason %q", configType, configTypeArg, output)
+	}
+	logger.Debugf("created %q %q", configType, configTypeArg)
+
+	return nil
+}
+
 func createMultisite(objContext *Context, endpointArg string) error {
 	logger.Debugf("creating realm, zone group, zone for object-store %v", objContext.Name)
 
 	realmArg := fmt.Sprintf("--rgw-realm=%s", objContext.Realm)
 	zoneGroupArg := fmt.Sprintf("--rgw-zonegroup=%s", objContext.ZoneGroup)
+	zoneArg := fmt.Sprintf("--rgw-zone=%s", objContext.Zone)
 
-	// create the realm if it doesn't exist yet
-	output, err := RunAdminCommandNoMultisite(objContext, true, "realm", "get", realmArg)
+	err := createMultisiteConfigurations(objContext, "realm", realmArg, "create")
 	if err != nil {
-		// ENOENT means "No such file or directory"
-		if code, err := exec.ExtractExitCode(err); err == nil && code == int(syscall.ENOENT) {
-			output, err = RunAdminCommandNoMultisite(objContext, false, "realm", "create", realmArg)
-			if err != nil {
-				return errorOrIsNotFound(err, "failed to create ceph realm %q, for reason %q", objContext.ZoneGroup, output)
-			}
-			logger.Debugf("created realm %q", objContext.Realm)
-		} else {
-			return errorOrIsNotFound(err, "'radosgw-admin realm get' failed with code %d, for reason %q. %v", strconv.Itoa(code), output, string(kerrors.ReasonForError(err)))
-		}
+		return err
 	}
 
-	// create the zonegroup if it doesn't exist yet
-	output, err = RunAdminCommandNoMultisite(objContext, true, "zonegroup", "get", realmArg, zoneGroupArg)
+	err = createMultisiteConfigurations(objContext, "zonegroup", zoneGroupArg, "create", "--master", realmArg, endpointArg)
 	if err != nil {
-		// ENOENT means "No such file or directory"
-		if code, err := exec.ExtractExitCode(err); err == nil && code == int(syscall.ENOENT) {
-			output, err = RunAdminCommandNoMultisite(objContext, false, "zonegroup", "create", "--master", realmArg, zoneGroupArg, endpointArg)
-			if err != nil {
-				return errorOrIsNotFound(err, "failed to create ceph zone group %q, for reason %q", objContext.ZoneGroup, output)
-			}
-			logger.Debugf("created zone group %q", objContext.ZoneGroup)
-		} else {
-			return errorOrIsNotFound(err, "'radosgw-admin zonegroup get' failed with code %d, for reason %q", strconv.Itoa(code), output)
-		}
+		return err
 	}
 
-	// create the zone if it doesn't exist yet
-	output, err = runAdminCommand(objContext, true, "zone", "get")
+	err = createMultisiteConfigurations(objContext, "zone", zoneArg, "create", "--master", endpointArg, realmArg, zoneGroupArg)
 	if err != nil {
-		// ENOENT means "No such file or directory"
-		if code, err := exec.ExtractExitCode(err); err == nil && code == int(syscall.ENOENT) {
-			output, err = runAdminCommand(objContext, false, "zone", "create", "--master", endpointArg)
-			if err != nil {
-				return errorOrIsNotFound(err, "failed to create ceph zone %q, for reason %q", objContext.Zone, output)
-			}
-			logger.Debugf("created zone %q", objContext.Zone)
-		} else {
-			return errorOrIsNotFound(err, "'radosgw-admin zone get' failed with code %d, for reason %q", strconv.Itoa(code), output)
-		}
+		return err
 	}
 
 	if err := commitConfigChanges(objContext); err != nil {
@@ -774,14 +774,7 @@ func CreatePools(context *Context, clusterSpec *cephv1.ClusterSpec, metadataPool
 // Check if this is a recent release of ceph where the legacy rgw_rados_pool_pg_num_min
 // is no longer available.
 func rgwRadosPGNumIsNew(cephVer cephver.CephVersion) bool {
-	if cephVer.IsPacific() && cephVer.IsAtLeast(rgwPgNumRemovedPacificVersion) {
-		return true
-	}
-	if cephVer.IsAtLeast(rgwPgNumRemovedQuincyVersion) {
-		return true
-	}
-	// the legacy setting should still be checked
-	return false
+	return cephVer.IsAtLeast(rgwPgNumRemovedQuincyVersion)
 }
 
 // configurePoolsConcurrently checks if operator pod resources are set or not

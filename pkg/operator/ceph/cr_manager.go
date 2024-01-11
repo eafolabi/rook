@@ -49,28 +49,15 @@ import (
 	cephv1 "github.com/rook/rook/pkg/apis/ceph.rook.io/v1"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
-)
-
-const (
-	certDir = "/etc/webhook"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 )
 
 var (
 	resourcesSchemeFuncs = []func(*runtime.Scheme) error{
 		clientgoscheme.AddToScheme,
 		cephv1.AddToScheme,
-	}
-)
-
-var (
-	webhookResources = []webhook.Validator{
-		&cephv1.CephCluster{},
-		&cephv1.CephBlockPool{},
-		&cephv1.CephObjectStore{},
-		&cephv1.CephBlockPoolRadosNamespace{},
-		&cephv1.CephFilesystemSubVolumeGroup{},
 	}
 )
 
@@ -156,11 +143,19 @@ func (o *Operator) startCRDManager(context context.Context, mgrErrorCh chan erro
 
 	// Set up a manager
 	mgrOpts := manager.Options{
-		LeaderElection:     false,
-		Namespace:          o.config.NamespaceToWatch,
-		MetricsBindAddress: "0",
-		Scheme:             scheme,
-		CertDir:            certDir,
+		LeaderElection: false,
+		Metrics: metricsserver.Options{
+			// BindAddress is the bind address for controller runtime metrics server default is 8080. Since we don't use the
+			// controller runtime metrics server, we need to set the bind address 0 so that port 8080 is available.
+			BindAddress: "0",
+		},
+		Scheme: scheme,
+	}
+
+	if o.config.NamespaceToWatch != "" {
+		mgrOpts.Cache = cache.Options{
+			DefaultNamespaces: map[string]cache.Config{o.config.NamespaceToWatch: {}},
+		}
 	}
 
 	logger.Info("setting up the controller-runtime manager")
@@ -168,28 +163,6 @@ func (o *Operator) startCRDManager(context context.Context, mgrErrorCh chan erro
 	if err != nil {
 		mgrErrorCh <- errors.Wrap(err, "failed to set up overall controller-runtime manager")
 		return
-	}
-
-	// Add webhook if needed
-	isPresent, err := createWebhook(context, o.context)
-	if err != nil {
-		mgrErrorCh <- errors.Wrap(err, "failed to retrieve admission webhook secret")
-		return
-	}
-	if isPresent {
-		err := createWebhookService(context, o.context)
-		if err != nil {
-			mgrErrorCh <- errors.Wrap(err, "failed to create admission webhook service")
-			return
-		}
-		logger.Info("setting up admission webhooks")
-		for _, resource := range webhookResources {
-			err = ctrl.NewWebhookManagedBy(mgr).For(resource).Complete()
-			if err != nil {
-				mgrErrorCh <- errors.Wrapf(err, "failed to register webhook for %q", resource.GetObjectKind().GroupVersionKind().Kind)
-				return
-			}
-		}
 	}
 
 	// options to pass to the controllers

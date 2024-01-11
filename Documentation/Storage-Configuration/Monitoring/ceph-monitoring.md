@@ -44,7 +44,7 @@ There are two sources for metrics collection:
 From the root of your locally cloned Rook repo, go the monitoring directory:
 
 ```console
-$ git clone --single-branch --branch v1.12.8 https://github.com/rook/rook.git
+$ git clone --single-branch --branch v1.13.1 https://github.com/rook/rook.git
 cd rook/deploy/examples/monitoring
 ```
 
@@ -261,7 +261,7 @@ After this you only need to create the service monitor as stated above.
 
 ### CSI Liveness
 
-To integrate CSI liveness and grpc into ceph monitoring we will need to deploy
+To integrate CSI liveness into ceph monitoring we will need to deploy
 a service and service monitor.
 
 ```console

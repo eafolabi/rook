@@ -1,8 +1,15 @@
-# v1.12 Pending Release Notes
+# v1.13 Pending Release Notes
 
 ## Breaking Changes
 
+- Removed official support for Kubernetes v1.22
+- Removed support for Ceph Pacific (v16)
+- Support for the admission controller has been removed. See the
+  [Rook upgrade guide](./Documentation/Upgrade/rook-upgrade.md#breaking-changes-in-v113) for more details.
+
 ## Features
 
-- Automate the faster recovery of the RBD RWO volume from node loss utilizing kubernetes feature [Non-Graceful Node Shutdown](https://kubernetes.io/blog/2022/12/16/kubernetes-1-26-non-graceful-node-shutdown-beta/) by requiring manual tainting of the node with an 'out-of-service' taint once admin confirm that the node is down. This feature also prerequisites on the [CSI-add-ons](https://rook.github.io/docs/rook/latest/Storage-Configuration/Ceph-CSI/ceph-csi-drivers/?h=csiaddons#csi-addons-controller) for a network fencing CRD, enable `csi-addons` sidecar and the minimum required Kubernetes version is v1.26.
-- integrating with ceph cosi driver support
+- Added official support for Kubernetes v1.28
+- Added experimental `cephConfig` to CephCluster to allow setting Ceph config options in the Ceph MON config store via the CRD
+- CephCSI v3.10.0 is now the default CSI driver version.
+  Refer to [Ceph-CSI v3.10.0 Release Notes](https://github.com/ceph/ceph-csi/releases/tag/v3.10.0) for more details.

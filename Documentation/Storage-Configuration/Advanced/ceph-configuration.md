@@ -206,11 +206,13 @@ ceph osd pool set rbd pg_num 512
 ## Custom `ceph.conf` Settings
 
 !!! warning
-    The advised method for controlling Ceph configuration is to manually use the Ceph CLI
-    or the Ceph dashboard because this offers the most flexibility. It is highly recommended that this
-    only be used when absolutely necessary and that the `config` be reset to an empty string if/when the
-    configurations are no longer necessary. Configurations in the config file will make the Ceph cluster
-    less configurable from the CLI and dashboard and may make future tuning or debugging difficult.
+    The advised method for controlling Ceph configuration is to use the [`cephConfig:` structure](../../CRDs/Cluster/ceph-cluster-crd.md#ceph-config)
+    in the `CephCluster` CRD.
+
+    It is highly recommended that this only be used when absolutely necessary and that the `config` be
+    reset to an empty string if/when the configurations are no longer necessary. Configurations in the
+    config file will make the Ceph cluster less configurable from the CLI and dashboard and may make
+    future tuning or debugging difficult.
 
 Setting configs via Ceph's CLI requires that at least one mon be available for the configs to be
 set, and setting configs via dashboard requires at least one mgr to be available. Ceph also has
@@ -316,7 +318,7 @@ After the CSI pods are restarted, the new settings should be in effect.
 
 ### Example CSI `ceph.conf` Settings
 
-In this [Example](https://github.com/rook/rook/tree/master/deploy/csi-ceph-conf-override.yaml) we
+In this [Example](https://github.com/rook/rook/tree/master/deploy/examples/csi-ceph-conf-override.yaml) we
 will set the `rbd_validate_pool` to `false` to skip rbd pool validation.
 
 !!! warning

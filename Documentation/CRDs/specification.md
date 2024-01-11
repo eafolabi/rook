@@ -206,6 +206,18 @@ CephBlockPoolRadosNamespaceSpec
 <table>
 <tr>
 <td>
+<code>name</code><br/>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>The name of the CephBlockPoolRadosNamespaceSpec namespace. If not set, the default is the name of the CR.</p>
+</td>
+</tr>
+<tr>
+<td>
 <code>blockPoolName</code><br/>
 <em>
 string
@@ -1099,6 +1111,32 @@ LogCollectorSpec
 <p>Logging represents loggings settings</p>
 </td>
 </tr>
+<tr>
+<td>
+<code>csi</code><br/>
+<em>
+<a href="#ceph.rook.io/v1.CSIDriverSpec">
+CSIDriverSpec
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>CSI Driver Options applied per cluster.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>cephConfig</code><br/>
+<em>
+map[string]map[string]string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Ceph Config options</p>
+</td>
+</tr>
 </table>
 </td>
 </tr>
@@ -1484,6 +1522,18 @@ CephFilesystemSubVolumeGroupSpec
 <table>
 <tr>
 <td>
+<code>name</code><br/>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>The name of the subvolume group. If not set, the default is the name of the subvolumeGroup CR.</p>
+</td>
+</tr>
+<tr>
+<td>
 <code>filesystemName</code><br/>
 <em>
 string
@@ -1494,6 +1544,22 @@ string
 the CephFilesystem CR. If not coming from the CephFilesystem CR, it can be retrieved from the
 list of Ceph Filesystem volumes with <code>ceph fs volume ls</code>. To learn more about Ceph Filesystem
 abstractions see <a href="https://docs.ceph.com/en/latest/cephfs/fs-volumes/#fs-volumes-and-subvolumes">https://docs.ceph.com/en/latest/cephfs/fs-volumes/#fs-volumes-and-subvolumes</a></p>
+</td>
+</tr>
+<tr>
+<td>
+<code>pinning</code><br/>
+<em>
+<a href="#ceph.rook.io/v1.CephFilesystemSubVolumeGroupSpecPinning">
+CephFilesystemSubVolumeGroupSpecPinning
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Pinning configuration of CephFilesystemSubVolumeGroup,
+reference <a href="https://docs.ceph.com/en/latest/cephfs/fs-volumes/#pinning-subvolumes-and-subvolume-groups">https://docs.ceph.com/en/latest/cephfs/fs-volumes/#pinning-subvolumes-and-subvolume-groups</a>
+only one out of (export, distributed, random) can be set at a time</p>
 </td>
 </tr>
 </table>
@@ -2794,6 +2860,94 @@ case where the range spec is forgotten (e.g., /24). Rook does in-depth validatio
 </td>
 </tr></tbody>
 </table>
+<h3 id="ceph.rook.io/v1.CSICephFSSpec">CSICephFSSpec
+</h3>
+<p>
+(<em>Appears on:</em><a href="#ceph.rook.io/v1.CSIDriverSpec">CSIDriverSpec</a>)
+</p>
+<div>
+<p>CSICephFSSpec defines the settings for CephFS CSI driver.</p>
+</div>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>kernelMountOptions</code><br/>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>KernelMountOptions defines the mount options for kernel mounter.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>fuseMountOptions</code><br/>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>FuseMountOptions defines the mount options for ceph fuse mounter.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="ceph.rook.io/v1.CSIDriverSpec">CSIDriverSpec
+</h3>
+<p>
+(<em>Appears on:</em><a href="#ceph.rook.io/v1.ClusterSpec">ClusterSpec</a>)
+</p>
+<div>
+<p>CSIDriverSpec defines CSI Driver settings applied per cluster.</p>
+</div>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>readAffinity</code><br/>
+<em>
+<a href="#ceph.rook.io/v1.ReadAffinitySpec">
+ReadAffinitySpec
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>ReadAffinity defines the read affinity settings for CSI driver.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>cephfs</code><br/>
+<em>
+<a href="#ceph.rook.io/v1.CSICephFSSpec">
+CSICephFSSpec
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>CephFS defines CSI Driver settings for CephFS driver.</p>
+</td>
+</tr>
+</tbody>
+</table>
 <h3 id="ceph.rook.io/v1.Capacity">Capacity
 </h3>
 <p>
@@ -2868,6 +3022,18 @@ string
 </tr>
 </thead>
 <tbody>
+<tr>
+<td>
+<code>name</code><br/>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>The name of the CephBlockPoolRadosNamespaceSpec namespace. If not set, the default is the name of the CR.</p>
+</td>
+</tr>
 <tr>
 <td>
 <code>blockPoolName</code><br/>
@@ -3454,6 +3620,18 @@ int64
 <tbody>
 <tr>
 <td>
+<code>name</code><br/>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>The name of the subvolume group. If not set, the default is the name of the subvolumeGroup CR.</p>
+</td>
+</tr>
+<tr>
+<td>
 <code>filesystemName</code><br/>
 <em>
 string
@@ -3464,6 +3642,73 @@ string
 the CephFilesystem CR. If not coming from the CephFilesystem CR, it can be retrieved from the
 list of Ceph Filesystem volumes with <code>ceph fs volume ls</code>. To learn more about Ceph Filesystem
 abstractions see <a href="https://docs.ceph.com/en/latest/cephfs/fs-volumes/#fs-volumes-and-subvolumes">https://docs.ceph.com/en/latest/cephfs/fs-volumes/#fs-volumes-and-subvolumes</a></p>
+</td>
+</tr>
+<tr>
+<td>
+<code>pinning</code><br/>
+<em>
+<a href="#ceph.rook.io/v1.CephFilesystemSubVolumeGroupSpecPinning">
+CephFilesystemSubVolumeGroupSpecPinning
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Pinning configuration of CephFilesystemSubVolumeGroup,
+reference <a href="https://docs.ceph.com/en/latest/cephfs/fs-volumes/#pinning-subvolumes-and-subvolume-groups">https://docs.ceph.com/en/latest/cephfs/fs-volumes/#pinning-subvolumes-and-subvolume-groups</a>
+only one out of (export, distributed, random) can be set at a time</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="ceph.rook.io/v1.CephFilesystemSubVolumeGroupSpecPinning">CephFilesystemSubVolumeGroupSpecPinning
+</h3>
+<p>
+(<em>Appears on:</em><a href="#ceph.rook.io/v1.CephFilesystemSubVolumeGroupSpec">CephFilesystemSubVolumeGroupSpec</a>)
+</p>
+<div>
+<p>CephFilesystemSubVolumeGroupSpecPinning represents the pinning configuration of SubVolumeGroup</p>
+</div>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>export</code><br/>
+<em>
+int
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+</td>
+</tr>
+<tr>
+<td>
+<code>distributed</code><br/>
+<em>
+int
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+</td>
+</tr>
+<tr>
+<td>
+<code>random,</code><br/>
+<em>
+float64
+</em>
+</td>
+<td>
+<em>(Optional)</em>
 </td>
 </tr>
 </tbody>
@@ -4249,6 +4494,32 @@ LogCollectorSpec
 <p>Logging represents loggings settings</p>
 </td>
 </tr>
+<tr>
+<td>
+<code>csi</code><br/>
+<em>
+<a href="#ceph.rook.io/v1.CSIDriverSpec">
+CSIDriverSpec
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>CSI Driver Options applied per cluster.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>cephConfig</code><br/>
+<em>
+map[string]map[string]string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Ceph Config options</p>
+</td>
+</tr>
 </tbody>
 </table>
 <h3 id="ceph.rook.io/v1.ClusterState">ClusterState
@@ -4461,7 +4732,7 @@ bool
 <td>
 <em>(Optional)</em>
 <p>Whether to compress the data in transit across the wire.
-The default is not set. Requires Ceph Quincy (v17) or newer.</p>
+The default is not set.</p>
 </td>
 </tr>
 </tbody>
@@ -5142,6 +5413,19 @@ time.Duration
 healthy (active+clean) after a drain was completed and OSDs came back up. Rook will continue with the next drain
 if the timeout exceeds. It only works if managePodBudgets is true.
 No values or 0 means that the operator will wait until the placement groups are healthy before unblocking the next drain.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>pgHealthyRegex</code><br/>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>PgHealthyRegex is the regular expression that is used to determine which PG states should be considered healthy.
+The default is <code>^(active\+clean|active\+clean\+scrubbing|active\+clean\+scrubbing\+deep)$</code></p>
 </td>
 </tr>
 <tr>
@@ -6135,8 +6419,7 @@ string
 <td>
 <em>(Optional)</em>
 <p>The Ceph pool used store the shared configuration for NFS-Ganesha daemons.
-This setting is required for Ceph v15 and ignored for Ceph v16.
-As of Ceph Pacific 16.2.7+, this is internally hardcoded to &ldquo;.nfs&rdquo;.</p>
+This setting is deprecated, as it is internally required to be &ldquo;.nfs&rdquo;.</p>
 </td>
 </tr>
 <tr>
@@ -6149,8 +6432,7 @@ string
 <td>
 <em>(Optional)</em>
 <p>The namespace inside the Ceph pool (set by &lsquo;pool&rsquo;) where shared NFS-Ganesha config is stored.
-This setting is required for Ceph v15 and ignored for Ceph v16.
-As of Ceph Pacific v16+, this is internally set to the name of the CephNFS.</p>
+This setting is deprecated as it is internally set to the name of the CephNFS.</p>
 </td>
 </tr>
 </tbody>
@@ -6555,8 +6837,7 @@ bool
 </td>
 <td>
 <em>(Optional)</em>
-<p>Send the notifications with the CloudEvents header: <a href="https://github.com/cloudevents/spec/blob/main/cloudevents/adapters/aws-s3.md">https://github.com/cloudevents/spec/blob/main/cloudevents/adapters/aws-s3.md</a>
-Supported for Ceph Quincy (v17) or newer.</p>
+<p>Send the notifications with the CloudEvents header: <a href="https://github.com/cloudevents/spec/blob/main/cloudevents/adapters/aws-s3.md">https://github.com/cloudevents/spec/blob/main/cloudevents/adapters/aws-s3.md</a></p>
 </td>
 </tr>
 </tbody>
@@ -8139,7 +8420,8 @@ NetworkProviderType
 </td>
 <td>
 <em>(Optional)</em>
-<p>Provider is what provides network connectivity to the cluster e.g. &ldquo;host&rdquo; or &ldquo;multus&rdquo;</p>
+<p>Provider is what provides network connectivity to the cluster e.g. &ldquo;host&rdquo; or &ldquo;multus&rdquo;.
+If the Provider is updated from being empty to &ldquo;host&rdquo; on a running cluster, then the operator will automatically fail over all the mons to apply the &ldquo;host&rdquo; network settings.</p>
 </td>
 </tr>
 <tr>
@@ -8211,7 +8493,9 @@ bool
 </td>
 <td>
 <em>(Optional)</em>
-<p>HostNetwork to enable host network</p>
+<p>HostNetwork to enable host network.
+If host networking is enabled or disabled on a running cluster, then the operator will automatically fail over all the mons to
+apply the new network settings.</p>
 </td>
 </tr>
 <tr>
@@ -10298,6 +10582,50 @@ optional</p>
 </tr>
 </tbody>
 </table>
+<h3 id="ceph.rook.io/v1.ReadAffinitySpec">ReadAffinitySpec
+</h3>
+<p>
+(<em>Appears on:</em><a href="#ceph.rook.io/v1.CSIDriverSpec">CSIDriverSpec</a>)
+</p>
+<div>
+<p>ReadAffinitySpec defines the read affinity settings for CSI driver.</p>
+</div>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>enabled</code><br/>
+<em>
+bool
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Enables read affinity for CSI driver.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>crushLocationLabels</code><br/>
+<em>
+[]string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>CrushLocationLabels defines which node labels to use
+as CRUSH location. This should correspond to the values set in
+the CRUSH map.</p>
+</td>
+</tr>
+</tbody>
+</table>
 <h3 id="ceph.rook.io/v1.ReplicatedSpec">ReplicatedSpec
 </h3>
 <p>
@@ -11266,11 +11594,6 @@ int64
 </tr>
 </tbody>
 </table>
-<h3 id="ceph.rook.io/v1.StatusConditionGetter">StatusConditionGetter
-</h3>
-<div>
-<p>A StatusConditionGetter allows getting a pointer to an object&rsquo;s conditions.</p>
-</div>
 <h3 id="ceph.rook.io/v1.StorageClassDeviceSet">StorageClassDeviceSet
 </h3>
 <p>

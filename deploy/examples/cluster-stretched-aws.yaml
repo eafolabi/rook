@@ -44,8 +44,7 @@ spec:
   mgr:
     count: 2
   cephVersion:
-    # Stretch cluster support upstream is only available starting in Ceph Pacific
-    image: quay.io/ceph/ceph:v17.2.6
+    image: quay.io/ceph/ceph:v18.2.1
     allowUnsupported: true
   skipUpgradeChecks: false
   continueUpgradeAfterChecksEvenIfNotHealthy: false
